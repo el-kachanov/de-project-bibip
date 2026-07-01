@@ -306,7 +306,73 @@ class CarService:
 
     # Задание 5. Обновление ключевого поля
     def update_vin(self, vin: str, new_vin: str) -> Car:
-        raise NotImplementedError
+        from datetime import datetime
+        from decimal import Decimal
+
+        base_path = Path(self.root_directory_path)
+        cars_file = base_path / 'cars.txt'
+        cars_index_file = base_path / 'cars_index.txt'
+
+        if not cars_file.exists() or not cars_index_file.exists():
+            raise ValueError('Car not found')
+
+        car_row_number: int | None = None
+        with open(cars_index_file, 'r', encoding='utf-8') as file:
+            for line in file:
+                line = line.strip()
+                if not line:
+                    continue
+
+                index_key_str, row_pos_str = line.split(';')
+                if index_key_str == vin:
+                    car_row_number = int(row_pos_str)
+                    break
+
+        if car_row_number is None:
+            raise ValueError('Car not found')
+
+        with open(cars_file, 'r', encoding='utf-8') as file:
+            car_lines = file.readlines()
+
+        old_vin_str, model_str, price_str, date_start_str, status_str = (
+            car_lines[car_row_number - 1].strip().split(';')
+        )
+
+        car_lines[car_row_number - 1] = (
+            f'{new_vin};{model_str};{price_str};'
+            f'{date_start_str};{status_str}\n'
+        )
+
+        with open(cars_file, 'w', encoding='utf-8') as file:
+            file.writelines(car_lines)
+
+        new_index_data: list[tuple[str, int]] = []
+        for row_number, line in enumerate(car_lines, start=1):
+            line = line.strip()
+            if not line:
+                continue
+
+            current_vin_str, *_rest = line.split(';')
+            new_index_data.append((current_vin_str, row_number))
+
+        new_index_data.sort(key=lambda item: item[0])
+
+        with open(cars_index_file, 'w', encoding='utf-8') as file:
+            for index_key_str, row_pos_int in new_index_data:
+                file.write(f'{index_key_str};{row_pos_int}\n')
+
+        model_id = int(model_str)
+        price_value = Decimal(price_str)
+        date_start_value = datetime.fromisoformat(date_start_str)
+        status_value = CarStatus(status_str)
+
+        return Car(
+            vin=new_vin,
+            model=model_id,
+            price=price_value,
+            date_start=date_start_value,
+            status=status_value,
+        )
 
     # Задание 6. Удаление продажи
     def revert_sale(self, sales_number: str) -> Car:
