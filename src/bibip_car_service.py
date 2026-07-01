@@ -26,24 +26,25 @@ class CarService:
         with open(models_file, 'a', encoding='utf-8') as file:
             file.write(f'{model.id};{model.name};{model.brand}\n')
 
-        index_data = []
+        index_data: list[tuple[str, int]] = []
         with open(models_index_file, 'r', encoding='utf-8') as file:
             for line in file:
                 line = line.strip()
-                if line:
-                    key, pos = line.split(';')
-                    index_data.append((key, int(pos)))
+                if not line:
+                    continue
+
+                index_key_str, row_pos_str = line.split(';')
+                index_data.append((index_key_str, int(row_pos_str)))
 
         index_data.append((str(model.id), row_number))
         index_data.sort(key=lambda item: item[0])
 
         with open(models_index_file, 'w', encoding='utf-8') as file:
-            for key, pos in index_data:
-                file.write(f'{key};{pos}\n')
+            for index_key_str, row_pos_int in index_data:
+                file.write(f'{index_key_str};{row_pos_int}\n')
 
         return model
     # Задание 1. Сохранение автомобилей и моделей
-
     def add_car(self, car: Car) -> Car:
         base_path = Path(self.root_directory_path)
         base_path.mkdir(parents=True, exist_ok=True)
@@ -62,36 +63,246 @@ class CarService:
 
         with open(cars_file, 'a', encoding='utf-8') as file:
             file.write(
-                f'{car.vin};{car.model};{car.price};{car.date_start};{car.status}\n')
+                f'{car.vin};{car.model};{car.price};'
+                f'{car.date_start};{car.status.value}\n'
+            )
 
-        index_data = []
+        index_data: list[tuple[str, int]] = []
         with open(cars_index_file, 'r', encoding='utf-8') as file:
             for line in file:
                 line = line.strip()
-                if line:
-                    key, pos = line.split(';')
-                    index_data.append((key, int(pos)))
+                if not line:
+                    continue
 
-        index_data.append((str(car.vin), row_number))
+                index_key_str, row_pos_str = line.split(';')
+                index_data.append((index_key_str, int(row_pos_str)))
+
+        index_data.append((car.vin, row_number))
         index_data.sort(key=lambda item: item[0])
 
         with open(cars_index_file, 'w', encoding='utf-8') as file:
-            for key, pos in index_data:
-                file.write(f'{key};{pos}\n')
+            for index_key_str, row_pos_int in index_data:
+                file.write(f'{index_key_str};{row_pos_int}\n')
 
         return car
 
     # Задание 2. Сохранение продаж.
     def sell_car(self, sale: Sale) -> Car:
-        raise NotImplementedError
+        from datetime import datetime
+        from decimal import Decimal
 
+        base_path = Path(self.root_directory_path)
+        base_path.mkdir(parents=True, exist_ok=True)
+
+        sales_file = base_path / 'sales.txt'
+        sales_index_file = base_path / 'sales_index.txt'
+        cars_file = base_path / 'cars.txt'
+        cars_index_file = base_path / 'cars_index.txt'
+
+        sales_file.touch(exist_ok=True)
+        sales_index_file.touch(exist_ok=True)
+        cars_file.touch(exist_ok=True)
+        cars_index_file.touch(exist_ok=True)
+
+        sales_row_number = 1
+        with open(sales_file, 'r', encoding='utf-8') as file:
+            for line in file:
+                if line.strip():
+                    sales_row_number += 1
+
+        with open(sales_file, 'a', encoding='utf-8') as file:
+            file.write(
+                f'{sale.sales_number};{sale.car_vin};'
+                f'{sale.cost};{sale.sales_date}\n'
+            )
+
+        sales_index_data: list[tuple[str, int]] = []
+        with open(sales_index_file, 'r', encoding='utf-8') as file:
+            for line in file:
+                line = line.strip()
+                if line:
+                    key, pos = line.split(';')
+                    sales_index_data.append((key, int(pos)))
+
+        sales_index_data.append((sale.sales_number, sales_row_number))
+        sales_index_data.sort(key=lambda item: item[0])
+
+        with open(sales_index_file, 'w', encoding='utf-8') as file:
+            for key, pos in sales_index_data:
+                file.write(f'{key};{pos}\n')
+
+        car_row_number: int | None = None
+        with open(cars_index_file, 'r', encoding='utf-8') as file:
+            for line in file:
+                line = line.strip()
+                if line:
+                    key, pos = line.split(';')
+                    if key == sale.car_vin:
+                        car_row_number = int(pos)
+                        break
+
+        if car_row_number is None:
+            raise ValueError('Car not found')
+
+        with open(cars_file, 'r', encoding='utf-8') as file:
+            car_lines = file.readlines()
+
+        vin_str, model_str, price_str, date_start_str, _old_status = (
+            car_lines[car_row_number - 1].strip().split(';')
+        )
+
+        sold_status_str = CarStatus.sold.value
+        car_lines[car_row_number - 1] = (
+            f'{vin_str};{model_str};{price_str};'
+            f'{date_start_str};{sold_status_str}\n'
+        )
+
+        with open(cars_file, 'w', encoding='utf-8') as file:
+            file.writelines(car_lines)
+
+        model_id = int(model_str)
+        price_value = Decimal(price_str)
+        date_start_value = datetime.fromisoformat(date_start_str)
+
+        return Car(
+            vin=vin_str,
+            model=model_id,
+            price=price_value,
+            date_start=date_start_value,
+            status=CarStatus.sold,
+        )
     # Задание 3. Доступные к продаже
-    def get_cars(self, status: CarStatus) -> list[Car]:
-        raise NotImplementedError
 
+    def get_cars(self, status: CarStatus) -> list[Car]:
+        from datetime import datetime
+        from decimal import Decimal
+
+        base_path = Path(self.root_directory_path)
+        cars_file = base_path / 'cars.txt'
+
+        if not cars_file.exists():
+            return []
+
+        result: list[Car] = []
+
+        with open(cars_file, 'r', encoding='utf-8') as file:
+            for line in file:
+                line = line.strip()
+                if not line:
+                    continue
+
+                vin_str, model_str, price_str, date_start_str, status_str = (
+                    line.split(';')
+                )
+
+                if status_str != status.value:
+                    continue
+
+                model_id = int(model_str)
+                price_value = Decimal(price_str)
+                date_start_value = datetime.fromisoformat(date_start_str)
+
+                result.append(
+                    Car(
+                        vin=vin_str,
+                        model=model_id,
+                        price=price_value,
+                        date_start=date_start_value,
+                        status=CarStatus(status_str),
+                    )
+                )
+
+        return result
     # Задание 4. Детальная информация
+
     def get_car_info(self, vin: str) -> CarFullInfo | None:
-        raise NotImplementedError
+        from datetime import datetime
+        from decimal import Decimal
+
+        base_path = Path(self.root_directory_path)
+
+        cars_file = base_path / 'cars.txt'
+        cars_index_file = base_path / 'cars_index.txt'
+        models_file = base_path / 'models.txt'
+        models_index_file = base_path / 'models_index.txt'
+        sales_file = base_path / 'sales.txt'
+
+        if not cars_file.exists() or not cars_index_file.exists():
+            return None
+
+        car_row_number: int | None = None
+        with open(cars_index_file, 'r', encoding='utf-8') as file:
+            for line in file:
+                line = line.strip()
+                if not line:
+                    continue
+                key, pos = line.split(';')
+                if key == vin:
+                    car_row_number = int(pos)
+                    break
+
+        if car_row_number is None:
+            return None
+
+        with open(cars_file, 'r', encoding='utf-8') as file:
+            car_lines = file.readlines()
+
+        vin_str, model_str, price_str, date_start_str, status_str = (
+            car_lines[car_row_number - 1].strip().split(';')
+        )
+
+        model_row_number: int | None = None
+        with open(models_index_file, 'r', encoding='utf-8') as file:
+            for line in file:
+                line = line.strip()
+                if not line:
+                    continue
+                key, pos = line.split(';')
+                if key == model_str:
+                    model_row_number = int(pos)
+                    break
+
+        if model_row_number is None:
+            return None
+
+        with open(models_file, 'r', encoding='utf-8') as file:
+            model_lines = file.readlines()
+
+        _model_id_str, model_name_str, model_brand_str = (
+            model_lines[model_row_number - 1].strip().split(';')
+        )
+
+        sales_date_value = None
+        sales_cost_value = None
+
+        if status_str == CarStatus.sold.value and sales_file.exists():
+            with open(sales_file, 'r', encoding='utf-8') as file:
+                for line in file:
+                    line = line.strip()
+                    if not line:
+                        continue
+
+                    _sales_number, car_vin_str, cost_str, sales_date_str = (
+                        line.split(';')
+                    )
+
+                    if car_vin_str == vin_str:
+                        sales_date_value = datetime.fromisoformat(
+                            sales_date_str
+                        )
+                        sales_cost_value = Decimal(cost_str)
+                        break
+
+        return CarFullInfo(
+            vin=vin_str,
+            car_model_name=model_name_str,
+            car_model_brand=model_brand_str,
+            price=Decimal(price_str),
+            date_start=datetime.fromisoformat(date_start_str),
+            status=CarStatus(status_str),
+            sales_date=sales_date_value,
+            sales_cost=sales_cost_value,
+        )
 
     # Задание 5. Обновление ключевого поля
     def update_vin(self, vin: str, new_vin: str) -> Car:
