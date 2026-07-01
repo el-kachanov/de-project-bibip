@@ -1,0 +1,23 @@
+# Виртуальные окружения
+.venv/
+venv/
+env/
+ENV/
+
+
+__pycache__/
+*.py[cod]
+*$py.class
+
+
+.pytest_cache/
+
+.env
+
+
+.vscode/
+.idea/
+
+*.egg-info/
+dist/
+build/
