@@ -376,7 +376,110 @@ class CarService:
 
     # Задание 6. Удаление продажи
     def revert_sale(self, sales_number: str) -> Car:
-        raise NotImplementedError
+        from datetime import datetime
+        from decimal import Decimal
+
+        base_path = Path(self.root_directory_path)
+        sales_file = base_path / 'sales.txt'
+        sales_index_file = base_path / 'sales_index.txt'
+        cars_file = base_path / 'cars.txt'
+        cars_index_file = base_path / 'cars_index.txt'
+
+        if (
+            not sales_file.exists()
+            or not sales_index_file.exists()
+            or not cars_file.exists()
+            or not cars_index_file.exists()
+        ):
+            raise ValueError('Sale not found')
+
+        sale_car_vin: str | None = None
+
+        with open(sales_file, 'r', encoding='utf-8') as file:
+            sales_lines = file.readlines()
+
+        new_sales_lines: list[str] = []
+        for line in sales_lines:
+            line = line.strip()
+            if not line:
+                continue
+
+            sale_number_str, car_vin_str, _cost_str, _sales_date_str = (
+                line.split(';')
+            )
+
+            if sale_number_str == sales_number:
+                sale_car_vin = car_vin_str
+                continue
+
+            new_sales_lines.append(
+                f'{sale_number_str};{car_vin_str};'
+                f'{_cost_str};{_sales_date_str}\n'
+            )
+
+        if sale_car_vin is None:
+            raise ValueError('Sale not found')
+
+        with open(sales_file, 'w', encoding='utf-8') as file:
+            file.writelines(new_sales_lines)
+
+        new_sales_index_data: list[tuple[str, int]] = []
+        for row_number, line in enumerate(new_sales_lines, start=1):
+            line = line.strip()
+            if not line:
+                continue
+
+            sale_number_str, *_rest = line.split(';')
+            new_sales_index_data.append((sale_number_str, row_number))
+
+        new_sales_index_data.sort(key=lambda item: item[0])
+
+        with open(sales_index_file, 'w', encoding='utf-8') as file:
+            for index_key_str, row_pos_int in new_sales_index_data:
+                file.write(f'{index_key_str};{row_pos_int}\n')
+
+        car_row_number: int | None = None
+        with open(cars_index_file, 'r', encoding='utf-8') as file:
+            for line in file:
+                line = line.strip()
+                if not line:
+                    continue
+
+                index_key_str, row_pos_str = line.split(';')
+                if index_key_str == sale_car_vin:
+                    car_row_number = int(row_pos_str)
+                    break
+
+        if car_row_number is None:
+            raise ValueError('Car not found')
+
+        with open(cars_file, 'r', encoding='utf-8') as file:
+            car_lines = file.readlines()
+
+        vin_str, model_str, price_str, date_start_str, _status_str = (
+            car_lines[car_row_number - 1].strip().split(';')
+        )
+
+        available_status_str = CarStatus.available.value
+        car_lines[car_row_number - 1] = (
+            f'{vin_str};{model_str};{price_str};'
+            f'{date_start_str};{available_status_str}\n'
+        )
+
+        with open(cars_file, 'w', encoding='utf-8') as file:
+            file.writelines(car_lines)
+
+        model_id = int(model_str)
+        price_value = Decimal(price_str)
+        date_start_value = datetime.fromisoformat(date_start_str)
+
+        return Car(
+            vin=vin_str,
+            model=model_id,
+            price=price_value,
+            date_start=date_start_value,
+            status=CarStatus.available,
+        )
 
     # Задание 7. Самые продаваемые модели
     def top_models_by_sales(self) -> list[ModelSaleStats]:
