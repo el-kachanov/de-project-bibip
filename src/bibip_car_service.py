@@ -45,6 +45,7 @@ class CarService:
 
         return model
     # Задание 1. Сохранение автомобилей и моделей
+
     def add_car(self, car: Car) -> Car:
         base_path = Path(self.root_directory_path)
         base_path.mkdir(parents=True, exist_ok=True)
@@ -483,4 +484,98 @@ class CarService:
 
     # Задание 7. Самые продаваемые модели
     def top_models_by_sales(self) -> list[ModelSaleStats]:
-        raise NotImplementedError
+        from decimal import Decimal
+
+        base_path = Path(self.root_directory_path)
+        sales_file = base_path / 'sales.txt'
+        cars_file = base_path / 'cars.txt'
+        cars_index_file = base_path / 'cars_index.txt'
+        models_file = base_path / 'models.txt'
+        models_index_file = base_path / 'models_index.txt'
+
+        if (
+            not sales_file.exists()
+            or not cars_file.exists()
+            or not cars_index_file.exists()
+            or not models_file.exists()
+            or not models_index_file.exists()
+        ):
+            return []
+
+        vin_to_model_id: dict[str, int] = {}
+        vin_to_price: dict[str, Decimal] = {}
+
+        with open(cars_file, 'r', encoding='utf-8') as file:
+            for line in file:
+                line = line.strip()
+                if not line:
+                    continue
+
+                vin_str, model_str, price_str, _date_start_str, _status_str = (
+                    line.split(';')
+                )
+                vin_to_model_id[vin_str] = int(model_str)
+                vin_to_price[vin_str] = Decimal(price_str)
+
+        model_sales_count: dict[int, int] = {}
+        model_max_price: dict[int, Decimal] = {}
+
+        with open(sales_file, 'r', encoding='utf-8') as file:
+            for line in file:
+                line = line.strip()
+                if not line:
+                    continue
+
+                _sale_number_str, car_vin_str, _cost_str, _sales_date_str = (
+                    line.split(';')
+                )
+
+                if car_vin_str not in vin_to_model_id:
+                    continue
+
+                model_id = vin_to_model_id[car_vin_str]
+                car_price = vin_to_price[car_vin_str]
+
+                model_sales_count[model_id] = (
+                    model_sales_count.get(model_id, 0) + 1
+                )
+
+                current_max_price = model_max_price.get(model_id)
+                if current_max_price is None or car_price > current_max_price:
+                    model_max_price[model_id] = car_price
+
+        sorted_model_ids = sorted(
+            model_sales_count.keys(),
+            key=lambda model_id: (
+                -model_sales_count[model_id],
+                -model_max_price[model_id],
+            ),
+        )
+
+        top_model_ids = sorted_model_ids[:3]
+
+        model_info_by_id: dict[int, tuple[str, str]] = {}
+        with open(models_file, 'r', encoding='utf-8') as file:
+            for line in file:
+                line = line.strip()
+                if not line:
+                    continue
+
+                model_id_str, model_name_str, brand_str = line.split(';')
+                model_info_by_id[int(model_id_str)] = (
+                    model_name_str,
+                    brand_str,
+                )
+
+        result: list[ModelSaleStats] = []
+        for model_id in top_model_ids:
+            model_name_str, brand_str = model_info_by_id[model_id]
+            result.append(
+                ModelSaleStats(
+                    car_model_name=model_name_str,
+                    brand=brand_str,
+                    sales_number=model_sales_count[model_id],
+                )
+            )
+
+        return result
