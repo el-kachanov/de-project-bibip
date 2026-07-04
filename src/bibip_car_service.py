@@ -1,33 +1,32 @@
+
 from pathlib import Path
 from models import Car, CarFullInfo, CarStatus, Model, ModelSaleStats, Sale
 
 
 class CarService:
+    MODELS_FILE_NAME = 'models.txt'
+    MODELS_INDEX_FILE_NAME = 'models_index.txt'
+    CARS_FILE_NAME = 'cars.txt'
+    CARS_INDEX_FILE_NAME = 'cars_index.txt'
+    SALES_FILE_NAME = 'sales.txt'
+    SALES_INDEX_FILE_NAME = 'sales_index.txt'
+
     def __init__(self, root_directory_path: str) -> None:
         self.root_directory_path = root_directory_path
+        self.models_index: list[tuple[str, int]] | None = None
+        self.cars_index: list[tuple[str, int]] | None = None
+        self.sales_index: list[tuple[str, int]] | None = None
 
-    # Задание 1. Сохранение автомобилей и моделей
-    def add_model(self, model: Model) -> Model:
+    def _get_base_path(self) -> Path:
         base_path = Path(self.root_directory_path)
         base_path.mkdir(parents=True, exist_ok=True)
+        return base_path
 
-        models_file = base_path / 'models.txt'
-        models_index_file = base_path / 'models_index.txt'
-
-        models_file.touch(exist_ok=True)
-        models_index_file.touch(exist_ok=True)
-
-        row_number = 1
-        with open(models_file, 'r', encoding='utf-8') as file:
-            for line in file:
-                if line.strip():
-                    row_number += 1
-
-        with open(models_file, 'a', encoding='utf-8') as file:
-            file.write(f'{model.id};{model.name};{model.brand}\n')
-
+    def _load_index(self, index_file: Path) -> list[tuple[str, int]]:
         index_data: list[tuple[str, int]] = []
-        with open(models_index_file, 'r', encoding='utf-8') as file:
+        index_file.touch(exist_ok=True)
+
+        with open(index_file, 'r', encoding='utf-8') as file:
             for line in file:
                 line = line.strip()
                 if not line:
@@ -36,31 +35,59 @@ class CarService:
                 index_key_str, row_pos_str = line.split(';')
                 index_data.append((index_key_str, int(row_pos_str)))
 
-        index_data.append((str(model.id), row_number))
-        index_data.sort(key=lambda item: item[0])
+        return index_data
 
-        with open(models_index_file, 'w', encoding='utf-8') as file:
+    def _save_index(
+        self,
+        index_file: Path,
+        index_data: list[tuple[str, int]],
+    ) -> None:
+        with open(index_file, 'w', encoding='utf-8') as file:
             for index_key_str, row_pos_int in index_data:
                 file.write(f'{index_key_str};{row_pos_int}\n')
 
+    def _get_models_index(self) -> list[tuple[str, int]]:
+        if self.models_index is None:
+            base_path = self._get_base_path()
+            index_file = base_path / self.MODELS_INDEX_FILE_NAME
+            self.models_index = self._load_index(index_file)
+        return self.models_index
+
+    def _get_cars_index(self) -> list[tuple[str, int]]:
+        if self.cars_index is None:
+            base_path = self._get_base_path()
+            index_file = base_path / self.CARS_INDEX_FILE_NAME
+            self.cars_index = self._load_index(index_file)
+        return self.cars_index
+
+    def add_model(self, model: Model) -> Model:
+        base_path = self._get_base_path()
+        models_file = base_path / self.MODELS_FILE_NAME
+        models_index_file = base_path / self.MODELS_INDEX_FILE_NAME
+
+        models_file.touch(exist_ok=True)
+        models_index = self._get_models_index()
+
+        row_number = len(models_index) + 1
+
+        with open(models_file, 'a', encoding='utf-8') as file:
+            file.write(f'{model.id};{model.name};{model.brand}\n')
+
+        models_index.append((str(model.id), row_number))
+        models_index.sort(key=lambda item: item[0])
+        self._save_index(models_index_file, models_index)
+
         return model
-    # Задание 1. Сохранение автомобилей и моделей
 
     def add_car(self, car: Car) -> Car:
-        base_path = Path(self.root_directory_path)
-        base_path.mkdir(parents=True, exist_ok=True)
-
-        cars_file = base_path / 'cars.txt'
-        cars_index_file = base_path / 'cars_index.txt'
+        base_path = self._get_base_path()
+        cars_file = base_path / self.CARS_FILE_NAME
+        cars_index_file = base_path / self.CARS_INDEX_FILE_NAME
 
         cars_file.touch(exist_ok=True)
-        cars_index_file.touch(exist_ok=True)
+        cars_index = self._get_cars_index()
 
-        row_number = 1
-        with open(cars_file, 'r', encoding='utf-8') as file:
-            for line in file:
-                if line.strip():
-                    row_number += 1
+        row_number = len(cars_index) + 1
 
         with open(cars_file, 'a', encoding='utf-8') as file:
             file.write(
@@ -68,26 +95,13 @@ class CarService:
                 f'{car.date_start};{car.status.value}\n'
             )
 
-        index_data: list[tuple[str, int]] = []
-        with open(cars_index_file, 'r', encoding='utf-8') as file:
-            for line in file:
-                line = line.strip()
-                if not line:
-                    continue
-
-                index_key_str, row_pos_str = line.split(';')
-                index_data.append((index_key_str, int(row_pos_str)))
-
-        index_data.append((car.vin, row_number))
-        index_data.sort(key=lambda item: item[0])
-
-        with open(cars_index_file, 'w', encoding='utf-8') as file:
-            for index_key_str, row_pos_int in index_data:
-                file.write(f'{index_key_str};{row_pos_int}\n')
+        cars_index.append((car.vin, row_number))
+        cars_index.sort(key=lambda item: item[0])
+        self._save_index(cars_index_file, cars_index)
 
         return car
-
     # Задание 2. Сохранение продаж.
+
     def sell_car(self, sale: Sale) -> Car:
         from datetime import datetime
         from decimal import Decimal
